@@ -9,7 +9,11 @@ packages = [{include = "gimirrai", from = "src"}]
 [tool.poetry.dependencies]
 python = "^3.10"
 pillow-heif = "^0.13.1"
+rasterio = "^1.3.9"
 
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.16.1"
 
 [build-system]
 requires = ["poetry-core"]
