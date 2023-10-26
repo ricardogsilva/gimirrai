@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "gimirrai"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "gimirrai", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pillow-heif = "^0.13.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

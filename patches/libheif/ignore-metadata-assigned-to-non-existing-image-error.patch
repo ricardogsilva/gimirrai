@@ -1,0 +1,12 @@
+diff --git a/libheif/context.cc b/libheif/context.cc
+index 32077bb..df550f0 100644
+--- a/libheif/context.cc
++++ b/libheif/context.cc
+@@ -918,6 +918,7 @@ Error HeifContext::interpret_heif_file()
+           uint32_t exif_image_id = refs[0];
+           auto img_iter = m_all_images.find(exif_image_id);
+           if (img_iter == m_all_images.end()) {
++            continue;
+             return Error(heif_error_Invalid_input,
+                          heif_suberror_Nonexisting_item_referenced,
+                          "Metadata assigned to non-existing image");
