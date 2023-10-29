@@ -1,0 +1,4 @@
+pyisobmff
+- license: MIT
+- code repository: https://github.com/chemag/pyisobmff
+- current version: d5fc2ec

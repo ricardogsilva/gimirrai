@@ -12,11 +12,11 @@ import pillow_heif
 logger = logging.getLogger(__name__)
 
 
-def decode_string(value: bytes) -> str:
+def _decode_string(value: bytes) -> str:
     return value.decode("utf-8")
 
 
-def decode_latitude_coordinate(lat_value: int) -> float:
+def _decode_latitude_coordinate(lat_value: int) -> float:
     """Decode the parsed KLV latitude coordinate.
 
     Calculations implement the description in MISB ST0601 section 8.82
@@ -25,7 +25,7 @@ def decode_latitude_coordinate(lat_value: int) -> float:
     return latitude_degrees
 
 
-def decode_longitude_coordinate(lon_value: int) -> float:
+def _decode_longitude_coordinate(lon_value: int) -> float:
     """Decode the parsed KLV longitude coordinate.
 
     Calculations implement the description in MISB ST0601 section 8.83
@@ -34,7 +34,7 @@ def decode_longitude_coordinate(lon_value: int) -> float:
     return longitude_degrees
 
 
-def decode_timestamp(microsecond_value: int) -> Optional[dt.datetime]:
+def _decode_timestamp(microsecond_value: int) -> Optional[dt.datetime]:
     """Decode the parsed KLV precision time stamp.
 
     Calculations implement the description in MISB ST0601 section 8.2.
@@ -47,21 +47,29 @@ def decode_timestamp(microsecond_value: int) -> Optional[dt.datetime]:
         return epoch + dt.timedelta(microseconds=microsecond_value)
     except OverflowError:
         logger.exception(f"Could not decode timestamp {microsecond_value=}")
-        return None
 
 
 # tags, description, size, type gotten from the MISB ST0601 document
+# - The longitude and latitude tags (i.e. 82, 83, 84, 85, 86, 87, 88, 89)
+# are assigned the `L` format, which stands for `unsigned long`, even though
+# ST0601 refers to them as being `int32` (which would correspond to the `l`
+# format in Python, i.e. `signed long`) - this seems to be more correct in
+# relation to the sample GIMI file provided for initial implementation
+# - Additionally, ST0601 specifies that longitude-related tags have an 84
+# nano degree resolution and latitude-related tags have an 42 nano degree
+# resolution, but the current implementation only seems to coincide with
+# the sample reference data up to the micro degree.
 TAG_FORMATS = {
-    2: ("begin_position", "Q", decode_timestamp),  # precision time stamp, size: 8, type: uint64
-    3: ("title", "s", decode_string),  # mission id, size: variable, type: char[]
-    82: ("pt1_north_bound_latitude", "i", decode_latitude_coordinate),  # corner lat pt1, size: 4, type: int32
-    83: ("pt1_west_bound_longitude", "i", decode_longitude_coordinate),  # corner lon pt1, size: 4, type: int32
-    84: ("pt2_north_bound_latitude", "i", decode_latitude_coordinate),  # corner lat pt2, size: 4, type: int32
-    85: ("pt2_east_bound_longitude", "i", decode_longitude_coordinate),  # corner lon pt2, size: 4, type: int32
-    86: ("pt3_south_bound_latitude", "i", decode_latitude_coordinate),  # corner lat pt3, size: 4, type: int32
-    87: ("pt3_east_bound_longitude", "i", decode_longitude_coordinate),  # corner lon pt3, size: 4, type: int32
-    88: ("pt4_south_bound_latitude", "i", decode_latitude_coordinate),  # corner lat pt4, size: 4, type: int32
-    89: ("pt4_west_bound_longitude", "i", decode_longitude_coordinate),  # corner lon pt4, size: 4, type: int32
+    2: ("begin_position", "Q", _decode_timestamp),  # precision time stamp, size: 8, type: uint64
+    3: ("title", "s", _decode_string),  # mission id, size: variable, type: char[]
+    82: ("pt1_north_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt1, size: 4, type: int32
+    83: ("pt1_west_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt1, size: 4, type: int32
+    84: ("pt2_north_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt2, size: 4, type: int32
+    85: ("pt2_east_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt2, size: 4, type: int32
+    86: ("pt3_south_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt3, size: 4, type: int32
+    87: ("pt3_east_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt3, size: 4, type: int32
+    88: ("pt4_south_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt4, size: 4, type: int32
+    89: ("pt4_west_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt4, size: 4, type: int32
     65: ("st0601_version", "B", None),  # UAS Datalink LS Version Number, size: 1, type: uint8
     1: ("checksum", "H", None),  #  Checksum, size: 2, type: uint16
 }
@@ -81,7 +89,7 @@ def get_metadata(heif_ds: pillow_heif.HeifImage):
     """Decode KLV metadata from GIMI HEIF file image."""
     klv_packet_items = heif_ds.info["metadata"][0]["data"]
     buff = io.BytesIO(klv_packet_items)
-    meta = decode_metadata(buff)
+    meta = _decode_metadata(buff)
     return GimiKlvMetadata(
         title=meta.get("title", ""),
         begin_position=meta.get("begin_position"),
@@ -92,12 +100,13 @@ def get_metadata(heif_ds: pillow_heif.HeifImage):
     )
 
 
-def decode_metadata(buff: io.BytesIO) -> dict:
+def _decode_metadata(buff: io.BytesIO) -> dict:
     """Decode KLV metadata coming from a GIMI file.
 
     This function makes some assumptions about the nature of the KLV bytestream:
 
-    - contents to have big-endian order
+    - contents to have big-endian order - hence the `>` prefix being used in
+    `struct.unpack()`
 
     - KLV size to be in BER short form (i.e. expect a single byte, which
     means size value < 128)
@@ -108,8 +117,10 @@ def decode_metadata(buff: io.BytesIO) -> dict:
     result = {}
     num_iterations = 0
     max_iterations = 1_000
+    byte_order = ">"  # AKA big-endian
     while ("checksum" not in result) and (num_iterations < max_iterations):
-        tag = struct.unpack(">B", buff.read(1))[0]
+        tag = struct.unpack(f"{byte_order}B", buff.read(1))[0]
+        logger.debug(f"{tag=}")
         if tag < 128:
             try:
                 name, format_, decoder = TAG_FORMATS[tag]
@@ -117,12 +128,14 @@ def decode_metadata(buff: io.BytesIO) -> dict:
                 logger.debug(f"Found unknown tag: {tag}, skipping...")
             else:
                 logger.info(f"found {name!r}")
-                size = struct.unpack(">B", buff.read(1))[0]
+                size = struct.unpack(f"{byte_order}B", buff.read(1))[0]
+                logger.debug(f"{size=}")
                 if size < 128:
                     if format_ == "s":
                         # format becomes char[] of the size we just read
                         format_ = f"{size}s"
-                    value = struct.unpack(format_, buff.read(size))[0]
+                    value = struct.unpack(
+                        f"{byte_order}{format_}", buff.read(size))[0]
                     if decoder is not None:
                         logger.debug(f"decoding {name} - before: {value}")
                         result[name] = decoder(value)
