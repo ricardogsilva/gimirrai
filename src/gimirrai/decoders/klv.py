@@ -8,6 +8,7 @@ import struct
 from typing import Optional
 
 import pillow_heif
+import rasterio
 
 logger = logging.getLogger(__name__)
 
@@ -62,42 +63,24 @@ def _decode_timestamp(microsecond_value: int) -> Optional[dt.datetime]:
 TAG_FORMATS = {
     2: ("begin_position", "Q", _decode_timestamp),  # precision time stamp, size: 8, type: uint64
     3: ("title", "s", _decode_string),  # mission id, size: variable, type: char[]
-    82: ("pt1_north_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt1, size: 4, type: int32
-    83: ("pt1_west_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt1, size: 4, type: int32
-    84: ("pt2_north_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt2, size: 4, type: int32
-    85: ("pt2_east_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt2, size: 4, type: int32
-    86: ("pt3_south_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt3, size: 4, type: int32
-    87: ("pt3_east_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt3, size: 4, type: int32
-    88: ("pt4_south_bound_latitude", "L", _decode_latitude_coordinate),  # corner lat pt4, size: 4, type: int32
-    89: ("pt4_west_bound_longitude", "L", _decode_longitude_coordinate),  # corner lon pt4, size: 4, type: int32
+    82: ("pt1_north_bound_latitude", "l", _decode_latitude_coordinate),  # corner lat pt1, size: 4, type: int32
+    83: ("pt1_west_bound_longitude", "l", _decode_longitude_coordinate),  # corner lon pt1, size: 4, type: int32
+    84: ("pt2_north_bound_latitude", "l", _decode_latitude_coordinate),  # corner lat pt2, size: 4, type: int32
+    85: ("pt2_east_bound_longitude", "l", _decode_longitude_coordinate),  # corner lon pt2, size: 4, type: int32
+    86: ("pt3_south_bound_latitude", "l", _decode_latitude_coordinate),  # corner lat pt3, size: 4, type: int32
+    87: ("pt3_east_bound_longitude", "l", _decode_longitude_coordinate),  # corner lon pt3, size: 4, type: int32
+    88: ("pt4_south_bound_latitude", "l", _decode_latitude_coordinate),  # corner lat pt4, size: 4, type: int32
+    89: ("pt4_west_bound_longitude", "l", _decode_longitude_coordinate),  # corner lon pt4, size: 4, type: int32
     65: ("st0601_version", "B", None),  # UAS Datalink LS Version Number, size: 1, type: uint8
     1: ("checksum", "H", None),  #  Checksum, size: 2, type: uint16
 }
 
 
-@dataclasses.dataclass
-class GimiKlvMetadata:
-    title: str
-    begin_position: str | None
-    upper_left_lon: float
-    upper_left_lat: float
-    lower_right_lon: float
-    lower_right_lat: float
-
-
-def get_metadata(heif_ds: pillow_heif.HeifImage):
+def get_metadata(heif_ds: pillow_heif.HeifImage) -> dict:
     """Decode KLV metadata from GIMI HEIF file image."""
     klv_packet_items = heif_ds.info["metadata"][0]["data"]
     buff = io.BytesIO(klv_packet_items)
-    meta = _decode_metadata(buff)
-    return GimiKlvMetadata(
-        title=meta.get("title", ""),
-        begin_position=meta.get("begin_position"),
-        upper_left_lon=meta.get("pt1_west_bound_longitude"),
-        upper_left_lat=meta.get("pt1_north_bound_latitude"),
-        lower_right_lon=meta.get("pt3_east_bound_longitude"),
-        lower_right_lat=meta.get("pt3_south_bound_latitude")
-    )
+    return _decode_metadata(buff)
 
 
 def _decode_metadata(buff: io.BytesIO) -> dict:

@@ -62,20 +62,13 @@ resources:
             - global
         extents:
             spatial:
-                bbox: [-180,-90,180,90]
+                bbox: [-0.06638425405434531,51.2789251800994,1.4420952095846158,52.314037793462184]
+                # bbox: [-180,-90,180,90]
                 crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
-        links:
-            - type: text/html
-              rel: canonical
-              title: information
-              href: https://eccc-msc.github.io/open-data/msc-data/nwp_gdps/readme_gdps_en
-              hreflang: en-CA
         providers:
             - type: coverage
-              name: rasterio
-              data: tests/data/CMC_glb_TMP_TGL_2_latlon.15x.15_2020081000_P000.grib2
-              options:
-                  DATA_ENCODING: COMPLEX_PACKING
+              name: gimirrai.pygeoapi_providers.gimi.GimiProvider
+              data: /home/ubuntu/dev/code-sprint-22-ngiis/GIMI Test Images/gimi_1_sentinel_hevc.heif
               format:
-                  name: GRIB
-                  mimetype: application/x-grib2
+                  name: HEIF
+                  mimetype: image/heic
