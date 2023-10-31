@@ -1,2 +1,2 @@
 [installer]
-no-binary = ["pillow-heif", "rasterio"]
+no-binary = ["rio-tiler", "pillow-heif", "rasterio"]

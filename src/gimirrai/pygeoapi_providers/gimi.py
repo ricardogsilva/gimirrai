@@ -1,13 +1,20 @@
 """pygeoapi provider for serving GIMI files."""
 
 import logging
+from pathlib import Path
 
 import pillow_heif
 import pyproj
 import rasterio
 import rasterio.io
 import rasterio.mask
+import rio_tiler.errors
+import rio_tiler.io
+from pygeoapi.models.provider.base import (
+    TileMatrixSetEnum, TilesMetadataFormat, TileSetMetadata, LinkType,
+    GeospatialDataType)
 from pygeoapi.provider import base
+from pygeoapi.provider.tile import BaseTileProvider
 from pygeoapi.util import read_data
 
 from .. import reader
@@ -15,7 +22,7 @@ from .. import reader
 logger = logging.getLogger(__name__)
 
 
-class GimiProvider(base.BaseProvider):
+class GimiCoverageProvider(base.BaseProvider):
     name: str
     type: str
     data: str  # path to the data file
@@ -417,3 +424,88 @@ def _get_parameter_metadata(driver, band) -> dict:
         'observed_property_id': None,
         'observed_property_name': None
     }
+
+
+class GimiTileProvider(BaseTileProvider):
+    """A pygeoapi tiles provider that reads GIMI files."""
+
+    def get_layer(self) -> str:
+        return Path(self.data).name
+
+    def get_tiling_schemes(self):
+        tile_matrix_set_links_list = [
+            TileMatrixSetEnum.WORLDCRS84QUAD.value,
+            TileMatrixSetEnum.WEBMERCATORQUAD.value
+        ]
+        tile_matrix_set_links = [
+            item for item in tile_matrix_set_links_list
+            if item.tileMatrixSet in self.options['schemes']]
+        return tile_matrix_set_links
+
+    def get_tiles_service(
+            self,
+            baseurl=None,
+            servicepath=None,
+            dirpath=None,
+            tile_type=None
+    ):
+        """
+        Gets mvt service description
+
+        :param baseurl: base URL of endpoint
+        :param servicepath: base path of URL
+        :param dirpath: directory basepath (equivalent of URL)
+        :param tile_type: tile format type
+
+        :returns: `dict` of item tile service
+        """
+
+        return {
+            "links": []
+        }
+
+    def get_tiles(
+            self,
+            layer=None,
+            tileset=None,
+            z: str | None = None,
+            y: str | None = None,
+            x: str | None = None,
+            format_: str = None
+    ):
+        """
+        Gets tile
+
+        :param layer: mvt tile layer
+        :param tileset: mvt tileset
+        :param z: z index
+        :param y: y index
+        :param x: x index
+        :param format_: tile format
+
+        :returns: an encoded mvt tile
+        """
+        # for now we will ignore the requested format
+        gimi_metadata = reader.get_gimi_metadata(self.data)
+        vrt_definition = reader.get_vrt(gimi_metadata)
+        with rio_tiler.io.Reader(vrt_definition) as dataset:
+            try:
+                tile = dataset.tile(tile_x=int(x), tile_y=int(y), tile_z=(z))
+            except rio_tiler.errors.TileOutsideBounds as err:
+                logger.info(f"Tile {z=} - {x=} - {y=} outside bounds")
+            else:
+                return tile.render(img_format="PNG")
+
+    def get_metadata(
+            self,
+            dataset,
+            server_url,
+            layer=None,
+            tileset=None,
+            metadata_format=None,
+            title=None,
+            description=None,
+            keywords=None,
+            **kwargs
+    ):
+        return {}

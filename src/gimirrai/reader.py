@@ -1,10 +1,15 @@
 """Reader utilities for working with sample GIMI data files."""
 
 import dataclasses
+import xml.etree.ElementTree as etree
 from pathlib import Path
+from xml.dom import minidom
 
 import pillow_heif
 import rasterio
+import rasterio.control
+import rasterio.crs
+import rasterio.vrt
 
 from .decoders import klv
 
@@ -23,6 +28,7 @@ class GimiImageMetadata:
     bands: dict[int, GimiBandData]
     begin_position: str | None
     crs: int
+    gcps: list[rasterio.control.GroundControlPoint]
     height: int
     lower_right_lon: float
     lower_right_lat: float
@@ -36,6 +42,7 @@ class GimiImageMetadata:
 
 @dataclasses.dataclass
 class GimiMetadata:
+    path: Path
     images: list[GimiImageMetadata]
 
 
@@ -76,6 +83,32 @@ def get_gimi_metadata(gimi_file: Path) -> GimiMetadata:
                 bands=bands,
                 begin_position=klv_meta.get("begin_position"),
                 crs=4326,
+                gcps=[
+                    rasterio.control.GroundControlPoint(
+                        row=0,
+                        col=0,
+                        y=klv_meta.get("pt1_north_bound_latitude"),
+                        x=klv_meta.get("pt1_west_bound_longitude"),
+                    ),
+                    rasterio.control.GroundControlPoint(
+                        row=0,
+                        col=width,
+                        y=klv_meta.get("pt1_north_bound_latitude"),
+                        x=klv_meta.get("pt3_east_bound_longitude"),
+                    ),
+                    rasterio.control.GroundControlPoint(
+                        row=height,
+                        col=width,
+                        y=klv_meta.get("pt3_south_bound_latitude"),
+                        x=klv_meta.get("pt3_east_bound_longitude"),
+                    ),
+                    rasterio.control.GroundControlPoint(
+                        row=height,
+                        col=0,
+                        y=klv_meta.get("pt3_south_bound_latitude"),
+                        x=klv_meta.get("pt1_west_bound_longitude"),
+                    ),
+                ],
                 height=height,
                 lower_right_lon=klv_meta.get("pt3_east_bound_longitude"),
                 lower_right_lat=klv_meta.get("pt3_south_bound_latitude"),
@@ -87,4 +120,34 @@ def get_gimi_metadata(gimi_file: Path) -> GimiMetadata:
                 y_resolution=y_resolution,
             )
         )
-    return GimiMetadata(images=gimi_images)
+    return GimiMetadata(
+        images=gimi_images,
+        path=gimi_file,
+    )
+
+
+def get_vrt(metadata: GimiMetadata) -> str:
+    """Generate a VRT string to open the GIMI file with rasterio."""
+    # inspired by: https://github.com/cogeotiff/rio-tiler/issues/564#issuecomment-1375675886
+    # generate a VRT string, add GCPs, override the geotransform and then use that
+    crs_wkt = rasterio.crs.CRS.from_epsg(metadata.images[0].crs).wkt
+    with rasterio.open(metadata.path) as ds:
+        vrt_xml_tree = etree.fromstring(
+            rasterio.vrt._boundless_vrt_doc(ds))
+        vrt_xml_tree.find("SRS").text = crs_wkt
+        vrt_xml_tree.find("GeoTransform").text = (
+            ",".join(str(i) for i in metadata.images[0].affine.to_gdal()))
+        gcp_list = etree.SubElement(vrt_xml_tree, 'GCPList')
+        gcp_list.attrib['Projection'] = crs_wkt
+        for gcp in metadata.images[0].gcps:
+            g = etree.SubElement(gcp_list, 'GCP')
+            g.attrib["Id"] = gcp.id
+            g.attrib['Pixel'] = str(gcp.col)
+            g.attrib['Line'] = str(gcp.row)
+            g.attrib['X'] = str(gcp.x)
+            g.attrib['Y'] = str(gcp.y)
+    return etree.tostring(vrt_xml_tree).decode("utf-8")
+
+
+def _show_vrt(vrt: str):
+    print(minidom.parseString(vrt).toprettyxml(indent="\t"))

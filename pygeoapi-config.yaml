@@ -67,8 +67,24 @@ resources:
                 crs: http://www.opengis.net/def/crs/OGC/1.3/CRS84
         providers:
             - type: coverage
-              name: gimirrai.pygeoapi_providers.gimi.GimiProvider
+              name: gimirrai.pygeoapi_providers.gimi.GimiCoverageProvider
               data: /home/ubuntu/dev/code-sprint-22-ngiis/GIMI Test Images/gimi_1_sentinel_hevc.heif
               format:
                   name: HEIF
                   mimetype: image/heic
+
+            - type: tile
+              name: gimirrai.pygeoapi_providers.gimi.GimiTileProvider
+              data: /home/ubuntu/dev/code-sprint-22-ngiis/GIMI Test Images/gimi_1_sentinel_hevc.heif
+              options:
+                metadata_format: json
+                bounds: [-0.06638425405434531,51.2789251800994,1.4420952095846158,52.314037793462184]
+                zoom:
+                  min: 0
+                  max: 11
+                schemes:
+                    - WebMercatorQuad
+                    - WorldCRS84Quad
+              format:
+                  name: PNG
+                  mimetype: image/png

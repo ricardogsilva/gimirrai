@@ -32,6 +32,7 @@ def build_gdal(base_dir: Path, install_dir: Path):
             -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF \
             -DOGR_BUILD_OPTIONAL_DRIVERS=OFF \
             -DGDAL_ENABLE_DRIVER_JP2OPENJPEG=ON \
+            -DGDAL_ENABLE_DRIVER_PNG=ON \
             -DOGR_ENABLE_DRIVER_GPKG=ON \
             -DOGR_ENABLE_DRIVER_MVT=ON \
             -DGDAL_ENABLE_DRIVER_OGCAPI=ON \
