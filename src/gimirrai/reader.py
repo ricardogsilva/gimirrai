@@ -5,6 +5,7 @@ import xml.etree.ElementTree as etree
 from pathlib import Path
 from xml.dom import minidom
 
+import shapely.geometry
 import pillow_heif
 import rasterio
 import rasterio.control
@@ -26,6 +27,7 @@ class GimiBandData:
 class GimiImageMetadata:
     affine: rasterio.Affine
     bands: dict[int, GimiBandData]
+    bbox: shapely.geometry.Polygon
     begin_position: str | None
     crs: int
     gcps: list[rasterio.control.GroundControlPoint]
@@ -81,6 +83,12 @@ def get_gimi_metadata(gimi_file: Path) -> GimiMetadata:
                     y_resolution
                 ),
                 bands=bands,
+                bbox=shapely.geometry.box(
+                    minx=klv_meta.get("pt1_west_bound_longitude"),
+                    miny=klv_meta.get("pt1_north_bound_latitude"),
+                    maxx=klv_meta.get("pt3_east_bound_longitude"),
+                    maxy=klv_meta.get("pt3_south_bound_latitude"),
+                ),
                 begin_position=klv_meta.get("begin_position"),
                 crs=4326,
                 gcps=[
